@@ -24,6 +24,10 @@ app.use("/api/user", userRouter )
 app.use("/api/listing",listingRouter )
 app.use("/api/booking",bookingRouter )
 
+app.get("/", (req, res) => {
+    res.send("Backend is running");
+});
+
 
 app.listen(port,()=>{
     connectDb()
