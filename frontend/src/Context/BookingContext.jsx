@@ -45,18 +45,12 @@ function BookingContext({children}) {
    navigate("/booked");
 
     toast.success("Booking Successfully");
-            // await getCurrentUser()
-            // await getListing()
-            // setBookingData(result.data)
-            // console.log(result.data)
-            // setbooking(false)
-            // navigate("/booked")
-            // toast.success("Booking Successfully")
-
+          
            
 
         } catch (error) {
             console.log(error)
+            console.log(error.response?.data)
             setBookingData(null)
             toast.error(error.response.data.message)
 
