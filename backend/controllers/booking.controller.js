@@ -1,17 +1,20 @@
-import Booking from "../model/booking.model.js"
-import Listing from "../model/listing.model.js"
-import User from "../model/user.model.js"
-import sendMail from "../utils/sendMail.js"
-import generateOTP from "../utils/otp.js"
+import Booking from "../model/booking.model.js";
+import Listing from "../model/listing.model.js";
+import User from "../model/user.model.js";
+import sendMail from "../utils/sendMail.js";
+import generateOTP from "../utils/otp.js";
+
+
 
 
 export const createBooking = async (req, res) => {
   try {
     console.log("CreateBooking API HIT");
-    let { id } = req.params;
-    let { checkIn, checkOut, totalRent } = req.body;
 
-    let listing = await Listing.findById(id);
+    const { id } = req.params;
+    const { checkIn, checkOut, totalRent } = req.body;
+
+    const listing = await Listing.findById(id);
 
     if (!listing) {
       return res.status(404).json({
@@ -46,10 +49,13 @@ export const createBooking = async (req, res) => {
     }
 
     const otp = generateOTP();
+
     console.log("OTP Generated:", otp);
 
     user.bookingOtp = otp;
-    user.bookingOtpExpiry = Date.now() + 5 * 60 * 1000;
+
+    user.bookingOtpExpiry =
+      Date.now() + 5 * 60 * 1000;
 
     user.pendingBooking = {
       checkIn,
@@ -59,8 +65,8 @@ export const createBooking = async (req, res) => {
     };
 
     await user.save();
-    console.log("User Saved");
 
+    console.log("User Saved");
     console.log("Before sendMail");
 
     await sendMail(
@@ -76,7 +82,8 @@ export const createBooking = async (req, res) => {
     });
 
   } catch (error) {
-    console.log("BOOKING ERROR:", error);
+
+    console.log("CREATE BOOKING ERROR:", error);
     console.log(error.stack);
 
     return res.status(500).json({
@@ -85,62 +92,200 @@ export const createBooking = async (req, res) => {
   }
 };
 
-export const cancelBooking = async (req, res) => {
-    try {
-        const { id } = req.params;
 
-        const listing = await Listing.findByIdAndUpdate(
-            id,
-            { isBooked: false },
-            { new: true }
-        );
 
-        if (!listing) {
-            return res.status(404).json({
-                message: "Listing not found"
-            });
-        }
 
-        const user = await User.findByIdAndUpdate(
-            listing.guest,
-            {
-                $pull: { booking: listing._id }
-            },
-            { new: true }
-        );
+export const verifyBookingOtp = async (req, res) => {
+  try {
 
-        if (!user) {
-            return res.status(404).json({
-                message: "User not found"
-            });
-        }
+    const { otp } = req.body;
 
-        return res.status(200).json({
-            message: "Booking cancelled"
-        });
+    const user = await User.findById(req.userId);
 
-    } catch (error) {
-        console.log("CANCEL BOOKING ERROR:", error);
-
-        return res.status(500).json({
-            message: error.message
-        });
+    if (!user) {
+      return res.status(404).json({
+        message: "User not found",
+      });
     }
+
+    if (!user.pendingBooking) {
+      return res.status(400).json({
+        message: "No pending booking found",
+      });
+    }
+
+    if (
+      String(user.bookingOtp) !== String(otp) ||
+      !user.bookingOtpExpiry ||
+      user.bookingOtpExpiry < Date.now()
+    ) {
+      return res.status(400).json({
+        message: "Invalid or Expired OTP",
+      });
+    }
+
+    const data = user.pendingBooking;
+
+    const listing = await Listing.findById(
+      data.listingId
+    );
+
+    if (!listing) {
+      return res.status(404).json({
+        message: "Listing not found",
+      });
+    }
+
+  
+
+    if (listing.isBooked) {
+      return res.status(400).json({
+        message: "Listing is already Booked",
+      });
+    }
+
+    const booking = await Booking.create({
+
+      checkIn: data.checkIn,
+
+      checkOut: data.checkOut,
+
+      totalRent: data.totalRent,
+
+      host: listing.host,
+
+      guest: req.userId,
+
+      listing: listing._id,
+    });
+
+    user.booking.push(booking._id);
+
+    user.bookingOtp = null;
+
+    user.bookingOtpExpiry = null;
+
+    user.pendingBooking = null;
+
+    await user.save();
+
+
+    listing.guest = req.userId;
+
+    listing.isBooked = true;
+
+    await listing.save();
+
+
+    return res.status(201).json({
+
+      message: "Booking Successful",
+
+      booking,
+    });
+
+  } catch (error) {
+
+    console.log("VERIFY OTP ERROR:", error);
+
+    console.log(error.stack);
+
+    return res.status(500).json({
+
+      message: error.message,
+    });
+  }
 };
 
-export const testMail = async (req, res) => {
+
+
+
+export const cancelBooking = async (req, res) => {
+
   try {
+
+    const { id } = req.params;
+
+    const listing = await Listing.findById(id);
+
+    if (!listing) {
+      return res.status(404).json({
+        message: "Listing not found",
+      });
+    }
+
+    const guestId = listing.guest;
+
+    if (!guestId) {
+      return res.status(400).json({
+        message: "No booking found for this listing",
+      });
+    }
+
+    await User.findByIdAndUpdate(
+      guestId,
+      {
+        $pull: {
+          booking: listing._id,
+        },
+      }
+    );
+
+    listing.isBooked = false;
+
+    listing.guest = null;
+
+    await listing.save();
+
+
+    return res.status(200).json({
+
+      message: "Booking cancelled",
+    });
+
+  } catch (error) {
+
+    console.log("CANCEL BOOKING ERROR:", error);
+
+    console.log(error.stack);
+
+    return res.status(500).json({
+
+      message: error.message,
+    });
+  }
+};
+
+
+
+
+export const testMail = async (req, res) => {
+
+  try {
+
     await sendMail(
+
       process.env.EMAIL_USER,
+
       "Test Email",
+
       "Congratulations! Nodemailer is working."
     );
 
+
     return res.status(200).json({
+
       message: "Email sent successfully",
     });
+
   } catch (error) {
+
+    console.log("TEST MAIL ERROR:", error);
+
+    console.log(error.stack);
+
     return res.status(500).json({
+
       message: error.message,
     });
   }
