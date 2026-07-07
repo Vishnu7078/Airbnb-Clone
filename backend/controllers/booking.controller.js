@@ -127,3 +127,21 @@ export const cancelBooking = async (req, res) => {
         });
     }
 };
+
+export const testMail = async (req, res) => {
+  try {
+    await sendMail(
+      process.env.EMAIL_USER,
+      "Test Email",
+      "Congratulations! Nodemailer is working."
+    );
+
+    return res.status(200).json({
+      message: "Email sent successfully",
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: error.message,
+    });
+  }
+};
