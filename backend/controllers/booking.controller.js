@@ -84,3 +84,46 @@ export const createBooking = async (req, res) => {
     });
   }
 };
+
+export const cancelBooking = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const listing = await Listing.findByIdAndUpdate(
+            id,
+            { isBooked: false },
+            { new: true }
+        );
+
+        if (!listing) {
+            return res.status(404).json({
+                message: "Listing not found"
+            });
+        }
+
+        const user = await User.findByIdAndUpdate(
+            listing.guest,
+            {
+                $pull: { booking: listing._id }
+            },
+            { new: true }
+        );
+
+        if (!user) {
+            return res.status(404).json({
+                message: "User not found"
+            });
+        }
+
+        return res.status(200).json({
+            message: "Booking cancelled"
+        });
+
+    } catch (error) {
+        console.log("CANCEL BOOKING ERROR:", error);
+
+        return res.status(500).json({
+            message: error.message
+        });
+    }
+};
